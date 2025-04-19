@@ -114,25 +114,76 @@ function Tree:generate_leaves(pos, radius)
     end
 end
 
-function Tree:root(pos, length, thickness)
-    local dir = {
-        x = math.random(-1, 1),
-        y = -math.random(1, 2), -- forces downward growth
-        z = math.random(-1, 1),
-    }
-
-    local last_node = vector.new(pos)
-
-    for i = 1, length do
+function Tree:generate_roots(base_pos, trunk_height)
+    local root_count = math.random(8, 12)
+    for i = 1, root_count do
         self:enqueue(function()
-            local taper = math.max(1, math.floor(thickness * (1 - i / length)))
-            local next_node = {
-                x = last_node.x + dir.x + math.random(-1, 1),
-                y = last_node.y + dir.y,
-                z = last_node.z + dir.z + math.random(-1, 1),
+            local angle = math.rad(i * (360 / root_count) + math.random(-10, 10))
+            local is_outer = math.random() > 0.4
+
+            local radius_from_center = is_outer and math.random(4, 6) or math.random(1, 2)
+
+            local start_y = base_pos.y + math.floor(trunk_height * 0.2) + math.random(0, 2)
+            local start_pos = {
+                x = math.floor(base_pos.x + math.cos(angle) * radius_from_center),
+                y = start_y,
+                z = math.floor(base_pos.z + math.sin(angle) * radius_from_center)
             }
-            self:draw_branch_segment(last_node, next_node, taper)
-            last_node = vector.new(next_node)
+
+            if is_outer then
+                -- Flared sideways root
+                local bend_height = base_pos.y + math.floor(trunk_height * 0.05)
+
+                local mid_pos = {
+                    x = start_pos.x + math.floor(math.cos(angle) * 2),
+                    y = bend_height,
+                    z = start_pos.z + math.floor(math.sin(angle) * 2)
+                }
+
+                local reach = math.floor(trunk_height * 0.3)
+
+                local end_pos = {
+                    x = mid_pos.x + math.floor(math.cos(angle) * reach * 0.5) + math.random(-2, 2),
+                    y = bend_height - math.random(3, 6),
+                    z = mid_pos.z + math.floor(math.sin(angle) * reach * 0.5) + math.random(-2, 2)
+                }
+
+                self:draw_branch_segment(start_pos, mid_pos, 3)
+                self:draw_branch_segment(mid_pos, end_pos, 2)
+
+                if math.random() < 0.6 then
+                    local ground_pos = {
+                        x = end_pos.x + math.floor(math.cos(angle) * reach * 0.5) + math.random(-2, 2),
+                        y = end_pos.y - math.random(2, 4),
+                        z = end_pos.z + math.floor(math.sin(angle) * reach * 0.5) + math.random(-2, 2)
+                    }
+                    self:draw_branch_segment(end_pos, ground_pos, 1)
+                end
+            else
+                -- Inner vertical root with branch splitting
+                local depth = math.floor(trunk_height * 0.3) + math.random(0, 5)
+                local thickness = 3
+                local current_pos = vector.new(start_pos)
+
+                for d = 1, depth do
+                    local next_pos = {
+                        x = current_pos.x + math.random(-1, 1),
+                        y = current_pos.y - 1,
+                        z = current_pos.z + math.random(-1, 1)
+                    }
+                    self:draw_branch_segment(current_pos, next_pos, thickness)
+                    current_pos = vector.new(next_pos)
+
+                    if thickness > 1 and math.random() < 0.3 then
+                        -- Split off a mini root
+                        self:branch(current_pos, math.random(3, 5), thickness - 1)
+                    end
+
+                    if d % 4 == 0 and thickness > 1 then
+                        thickness = thickness - 1
+                    end
+                end
+            end
         end)
     end
 end
@@ -151,40 +202,7 @@ function Tree:generate(pos)
     local x_offset, z_offset = 0, 0
 
     -- ROOT GENERATION
-    for i = 1, math.random(6, 10) do
-        self:enqueue(function()
-            local angle = math.rad(i * (360 / 8) + math.random(-20, 20))
-            local r = math.random(2, 5)
-
-            -- Start a bit up the trunk
-            local start_y = base_pos.y + math.random(0, 3)
-
-            -- Calculate starting point on side of trunk
-            local root_pos = {
-                x = math.floor(base_pos.x + math.cos(angle) * r),
-                y = start_y,
-                z = math.floor(base_pos.z + math.sin(angle) * r)
-            }
-
-            -- First segment: from trunk edge, slightly down
-            local mid_pos = {
-                x = root_pos.x + math.random(-1, 1),
-                y = root_pos.y - 1,
-                z = root_pos.z + math.random(-1, 1)
-            }
-
-            -- Second segment: farther out and deeper
-            local end_pos = {
-                x = root_pos.x + math.floor(math.cos(angle) * 3),
-                y = root_pos.y - math.random(4, 8),
-                z = root_pos.z + math.floor(math.sin(angle) * 3)
-            }
-
-            -- Draw segments with tapering thickness
-            self:draw_branch_segment(root_pos, mid_pos, 3) -- thick near trunk
-            self:draw_branch_segment(mid_pos, end_pos, math.random(1, 2)) -- tapering
-        end)
-    end
+    self:generate_roots(base_pos, trunk_height)
 
     -- TRUNK GENERATION
     for y = 0, trunk_height do
