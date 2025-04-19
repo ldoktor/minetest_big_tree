@@ -114,6 +114,29 @@ function Tree:generate_leaves(pos, radius)
     end
 end
 
+function Tree:root(pos, length, thickness)
+    local dir = {
+        x = math.random(-1, 1),
+        y = -math.random(1, 2), -- forces downward growth
+        z = math.random(-1, 1),
+    }
+
+    local last_node = vector.new(pos)
+
+    for i = 1, length do
+        self:enqueue(function()
+            local taper = math.max(1, math.floor(thickness * (1 - i / length)))
+            local next_node = {
+                x = last_node.x + dir.x + math.random(-1, 1),
+                y = last_node.y + dir.y,
+                z = last_node.z + dir.z + math.random(-1, 1),
+            }
+            self:draw_branch_segment(last_node, next_node, taper)
+            last_node = vector.new(next_node)
+        end)
+    end
+end
+
 -- Main generation function
 function Tree:generate(pos)
     self:init_queue()
@@ -127,6 +150,43 @@ function Tree:generate(pos)
 
     local x_offset, z_offset = 0, 0
 
+    -- ROOT GENERATION
+    for i = 1, math.random(6, 10) do
+        self:enqueue(function()
+            local angle = math.rad(i * (360 / 8) + math.random(-20, 20))
+            local r = math.random(2, 5)
+
+            -- Start a bit up the trunk
+            local start_y = base_pos.y + math.random(0, 3)
+
+            -- Calculate starting point on side of trunk
+            local root_pos = {
+                x = math.floor(base_pos.x + math.cos(angle) * r),
+                y = start_y,
+                z = math.floor(base_pos.z + math.sin(angle) * r)
+            }
+
+            -- First segment: from trunk edge, slightly down
+            local mid_pos = {
+                x = root_pos.x + math.random(-1, 1),
+                y = root_pos.y - 1,
+                z = root_pos.z + math.random(-1, 1)
+            }
+
+            -- Second segment: farther out and deeper
+            local end_pos = {
+                x = root_pos.x + math.floor(math.cos(angle) * 3),
+                y = root_pos.y - math.random(4, 8),
+                z = root_pos.z + math.floor(math.sin(angle) * 3)
+            }
+
+            -- Draw segments with tapering thickness
+            self:draw_branch_segment(root_pos, mid_pos, 3) -- thick near trunk
+            self:draw_branch_segment(mid_pos, end_pos, math.random(1, 2)) -- tapering
+        end)
+    end
+
+    -- TRUNK GENERATION
     for y = 0, trunk_height do
         local y_pos = y
         self:enqueue(function()
@@ -192,7 +252,7 @@ minetest.register_node("big_tree:oak", {
     groups = {choppy = 2, oddly_breakable_by_hand = 2},
     on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
         minetest.chat_send_player(clicker:get_player_name(), "You hear the forest groan...")
-        minetest.after(30, function()
+        minetest.after(5, function()
             OakTree:generate(pos)
         end)
     end
