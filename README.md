@@ -1,2 +1,2 @@
 # minetest_big_tree
-Big tree for Minetest
+Attempt to create a Big tree mode for Minetest using chatgpt/granite.
